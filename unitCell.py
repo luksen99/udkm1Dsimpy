@@ -215,7 +215,7 @@ class unitCell(object):
                 'optical'  : ['cAxis', 'optPenDepth', 'optRefIndex', 'optRefIndexPerStrain'],
                 }
 
-        types = kwargs.get('types', 'all')
+        types = kwargs.get('types')
         attrs = vars(self)
         # define the property names by the given type
         if types == 'all':
