@@ -161,7 +161,7 @@ class unitCell(object):
         # display the constituents
         classStr += str(self.numAtoms) + ' Constituents:\n'
         for i in range(self.numAtoms):
-            classStr += '{:s} \t {:0.2f} \t {:s}\n'.format(self.atoms[i][0].name, self.atoms[i][1](0), self.atoms[i][2])
+            classStr += '{:s} \n {:0.2f} \t {:s}\n'.format(self.atoms[i][0].name, self.atoms[i][1](0), self.atoms[i][2])
 
         return(classStr)
 
@@ -173,7 +173,7 @@ class unitCell(object):
         if not isinstance(strains, np.ndarray):
             strains = np.array([strains])
 
-        colors          = [cmx.Dark2(x) for x in np.linspace(0, 1, self.numAtoms)]
+        colors          = [cmx.Dark2(x) for x in np.linspace(0, 1.5, self.numAtoms)]
         atomIDs         = self.getAtomIDs()
 
         for strain in strains:
@@ -429,10 +429,7 @@ class unitCell(object):
         Set the higher orders of the spring constant for anharmonic
         phonon simulations.
         """
-        # check if HO is column vector and transpose it in this case
-        if HO.shape[0] > 1:
-            HO = HO.T
-
+      
         # reset old higher order spring constants
         self.springConst = np.delete(self.springConst,
                             np.r_[1:len(self.springConst)])
@@ -462,7 +459,7 @@ class unitCell(object):
             strain = args
         else:
             strain = 0
-
+        strain = np.array(strain)
         res = np.zeros([self.numAtoms])
         for i, atom in enumerate(self.atoms):
             res[i] = atom[1](strain)
