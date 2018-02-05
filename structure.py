@@ -68,7 +68,36 @@ class structure(object):
         else:
             self.numSubSystems = subStructure.numSubSystems
         
-        # add a substructure of N repetitions to the structure with
         
-        for i in range(N):
-            self.substructures.append(subStructure)  
+        self.substructures.append([subStructure, N])
+        # add a substructure of N repetitions to the structure with
+        #null = []
+        #for i in range(N):
+            #null.append(subStructure) 
+        #self.substructures.append(null) 
+    
+    def addSubstrate(self,subStructure):
+        if not isinstance(subStructure,structure):
+            raise ValueError('Class '+type(subStructure).__name__+' is no possible substrate. Only structure class is allowed!')
+            
+        self.substrate = subStructure
+    
+    def getNumberOfSubStructures(self):
+        N = 0
+        for i in range(len(self.substructures)):
+            if isinstance(self.substructures[i][0],unitCell):
+                N = N + 1
+        
+            else:
+                N = N + self.substructures[i][0].getNumberOfSubStructures()
+        return N  
+    
+    def getNumberOfUnitCells(self):
+        N = 0
+        for i in range(len(self.substructures)):
+            if isinstance(self.substructures[i][0],unitCell):
+                N = N + self.substructures[i][1]
+            else:
+                N = N + self.substructures[i][0].getNumberOfUnitCells()*self.substructures[i][1]
+                    
+        return N  
