@@ -101,3 +101,16 @@ class structure(object):
                 N = N + self.substructures[i][0].getNumberOfUnitCells()*self.substructures[i][1]
                     
         return N  
+    
+    def getUniqueUnitCells(self):
+        newList   = []
+        newListID = []
+        for i in range(len(self.substructures)):
+            if isinstance(self.substructures[i][0],unitCell):
+                if self.substructures[i][0] not in newList:
+                    newList   = newList   + [self.substructures[i][0]]
+                    newListID = newListID + [self.substructures[i][0].ID]
+            else:
+                (newListID, newList) = self.substructures[i][0].getUniqueUnitCells()
+        #print(newListID)        
+        return newListID,newList
