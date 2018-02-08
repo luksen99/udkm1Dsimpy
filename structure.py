@@ -15,6 +15,7 @@
 #
 # Copyright (C) 2017 Daniel Schick
 
+import more_itertools
 class structure(object):
     
     
@@ -101,6 +102,12 @@ class structure(object):
                 N = N + self.substructures[i][0].getNumberOfUnitCells()*self.substructures[i][1]
                     
         return N  
+    
+    
+    def getNumberOfUniqueUnitCells(self):
+        N = len(self.getUniqueUnitCells()[0])
+        return N
+    
     
     def getUniqueUnitCells(self):
         newList   = []
