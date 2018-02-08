@@ -114,3 +114,18 @@ class structure(object):
                 (newListID, newList) = self.substructures[i][0].getUniqueUnitCells()
         #print(newListID)        
         return newListID,newList
+    
+    def getUnitCellVectors(self):
+        Index     =  []
+        newList   =  []
+        newListID =  []
+        for j in range(len(self.substructures)):
+            if isinstance(self.substructures[j][0],unitCell):
+                Index     = Index     + [i for i, v in enumerate(self.getUniqueUnitCells()[1]) if v == self.substructures[j][0]]*self.substructures[j][1]
+                newList   = newList   + [v for i, v in enumerate(self.getUniqueUnitCells()[1]) if v == self.substructures[j][0]]*self.substructures[j][1]
+                newListID = newListID + [v.ID for i, v in enumerate(self.getUniqueUnitCells()[1]) if v == self.substructures[j][0]]*self.substructures[j][1]
+            else:
+                Index      = Index     + [self.substructures[j][0].getUnitCellVectors()[0]]*self.substructures[j][1]
+                newList    = newList   + [self.substructures[j][0].getUnitCellVectors()[1]]*self.substructures[j][1]
+                newListID  = newListID + [self.substructures[j][0].getUnitCellVectors()[2]]*self.substructures[j][1]
+        return list(more_itertools.collapse(Index)),list(more_itertools.collapse(newList)),list(more_itertools.collapse(newListID))   
