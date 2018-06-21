@@ -1,0 +1,16 @@
+class boundaryConditions(object): 
+    """ Object for the left and right type of boundary conditions for the
+        heat diffusion calculation:
+        1: isolator; 2:temperature; 3:flux
+        In case of 2) and 3) the corresponding value needs to be a K x 1-
+        vector, where K is the number of sub- systems.
+    """
+    def __init__(self, leftType ,leftValue, rightType, rightValue):
+        self.leftType = leftType 
+        self.leftValue = leftValue 
+        self.rightType = rightType
+        self.rightValue = rightValue 
+        
+        
+# Do the initialization        
+#B = boundaryConditions(1,[],1,[])        
