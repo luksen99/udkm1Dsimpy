@@ -1,0 +1,428 @@
+dim = None                                          #Define a global variable
+class heat(object): 
+    
+
+    def __init__(self,structure,boundaryConditions,forceRecalc,**kwargs): #one extra argument:boundaryConditions
+        #obj = obj@simulation(structure,forceRecalc,varargin{3:end}); 
+        
+        #Take the inputarguments that have been given in the simulation function
+        #self.KeepUnmatched = True
+        
+        self.heatDiffusion = kwargs.get('heatDiffusion', False) #set default for heatDiffusion
+        self.intpAtInterface = kwargs.get('intpAtInterface',11) #set default for ??? (see at BoundaryConditions)
+        self.S = structure
+        self.boundaryConditions = boundaryConditions           
+        
+        #self.odeOptions.RelTol = 1e-3 #set default ode options after initialization of parent class
+        
+  #=============================== Display is not working yet ===============================================          
+  # def __str__(self): 
+  #     classStr  = 'Heat simulation properties:\n'
+  #     classStr += 'heat diffusion:{}\n'.format(self.heatDiffusion) #Bool
+  #     classStr += 'interpolate at interfaces:{}\n'.format(self.intpAtInterface) #number
+  #     if not self.distances: #from structure: distances = obj.getDistancesOfUnitCells/units.nm 
+  #         classStr += 'no distance mesh is set for heat diffusion calculations.\n'
+  #     else: 
+  #         classStr += 'a distance mesh is set for heat diffusion calculations.\n'
+  #     classStr += 'ode options :'
+  #     
+  #     
+  #     
+  #      return(classStr)
+  #=============================== Display is not working yet ===============================================
+        
+
+    def pdeBoundaryConditions(self,zl,Tl,zr,Tr,t,**kwargs): 
+        global dim 
+        if not dim: 
+            dim = [self.S.numSubSystems,1]              #creates a dim x 1 Vector
+        if self.boundaryConditions.leftType == 2:       #Temperature
+            pl = Tl - self.B.boundaryConditions.leftValue #its a scalar?!
+            ql = np.zeros(dim)                          #dim x 1 of zeros
+        if self.boundaryConditions.leftType == 3:       #Flux
+            pl = self.boundaryConditions.leftValue
+            ql = np.ones(dim)
+        if self.boundaryConditions.leftType == 1:       #Isolator
+            pl = np.zeros(dim)                          #note here pl is a dim x 1 matrix
+            ql = np.ones(dim)
+        #right side Boundary conditions: 
+        if self.boundaryConditions.rightType == 2:      #Temperature
+            pr = Tr -  self.boundaryConditions.rightValue
+            qr = np.zeros(dim)
+                                                        
+        if self.boundaryConditions.rightType == 3:      #Flux
+            pr = -self.rightValue
+            qr = np.ones(dim)
+        if self.boundaryConditions.rightType == 1:      #Isolator 
+            pr = np.zeros(dim)
+            qr = np.ones(dim)
+        else:
+            print('Define the type of the Boundary conditions')
+        return(pl,ql,pr,qr)
+#============================================================================================================    
+    def setBoundaryCondition(self,value,*kwargs):
+         
+        Btype = 1                    #Isolator case = default   
+        if 'temperature' in kwargs:  #        
+            Btype = 2                #Temperature case        
+        if 'flux' in kwargs:         #          
+            Btype = 3                #Flux case          
+            
+        K = self.S.numSubSystems
+        if Btype != 1 and np.size(value) != K:
+            print('Non- isolating boundary conditions must have the same dimensionality as the number of subsystems K! ')
+        
+        if 'left' in kwargs:
+            self.boundaryConditions.leftType = Btype
+            self.boundaryConditions.leftValue = value
+            
+        else: #'right' in kwargs:
+            self.boundaryConditions.rightType = Btype
+            self.boundaryConditions.leftValue =  value
+            
+#=========================================================================================================== 
+"""I removed the round () after getDistancesOfUnitCells and after getDistancesOfInterfaces()
+Those are now defined as properties in Structure yet! 
+to make it temporarrily work and put an artificial value for optPenDept
+ The MATLAP helper function finderb (Searches for the first index _i_ of list where _key_ >= _list(i)_.
+_key_ can be a scalar or a vector of keys; _list_ must be a sorted vector.) has been replaced by
+np.where(key>=list)[0][0]
+"""
+===========================================================================================================
+    
+    def getAbsorptionProfile(self,dists):
+        if dists.any():
+            dStart = self.S.getDistancesOfUnitCells[0]
+            
+            #====== This is not working yet ===============
+            #if nargin < 2: 
+            #    dStart = self.getDistancesOfUnitCells()[0]
+            #    dists =  self.getDistancesOfUnitCells()[-1]
+            #===============================================
+        dInterfaces = self.S.getDistancesOfInterfaces[0] #the interfaces
+        N = len(dists)                                     #nb of distances
+            
+        dAlphadz = np.zeros((N,1)) #Initialized relative absorbed energies
+        I0 = 1                     #initial intensity
+        k  = 1                     #counter for 1st unit cell in layer
+            
+        for i in range(1,len(dInterfaces)+1):
+            #handle = handles{i} is a vertical vector
+                
+            #index = np.where(dStart >= dInterfaces[i-1])[0][0]
+            #UC = self.S.getUnitCellHandle(index)
+            #optPenDepth = UC.optPenDepth
+            optPenDepth = 43*u.nm
+                
+                #get all distances in the current layer to calculate the absorption profile
+            if i == len(dInterfaces): #last layer
+                z = dists[dists >= dInterfaces[i-1]]
+                z = dists[dists <=dInterfaces[i]]
+            else: 
+                z = dists[dists >= dInterfaces[i-1]]
+                z = dists[dists < dInterfaces[i]]
+                    
+            m = len(z) - 1
+            if optPenDepth != float('inf'): 
+                #the layer is absorbing:
+                dAlphadz[k:k+m] = I0/optPenDepth*np.exp(-(z-dInterfaces[i-1]))/optPenDepth
+                #calculate the remaining density for the next layer:
+                I0 = I0*np.exp(-(dInterfaces[i]-dInterfaces[i-1]))/optPenDepth
+                k = k+m+1
+            else: 
+                print('optPenDepth is infinity.')
+            return(dAlphadz)
+        
+#=========================================================================================================== 
+"""Things I changed in comparison to the MATLAB file:
+One additional Argument: dists is required now, since dAlphadz = self.getAbsorptionProfile() does not work.
+dispMessages are currently out, since they are not implemented in the class yet
+This needs to be done initTemp = self.checkInitialTemperature(initTemp)
+In General: Check the for loop and compare with MATLAB!
+"""
+#===========================================================================================================    
+    
+    def getTemperatureAfterDeltaExcitation(self,fluence,initTemp,dists): 
+    
+        startTime = time.time()
+        N = self.S.getNumberOfUnitCells() #nb of unit cells
+        dAlphadz = self.getAbsorptionProfile(dists) #absorption profile from Lambert Beer´s law
+        
+        intHeatCapacity  = 1e-9*0.3905*np.ones(300)#self.S.getUnitCellPropertyVector('initHeatCapacity')
+        cAxises          = 1e-9*0.3905*np.ones(300)#self.S.getUnitCellPropertyVector('cAxis')
+        masses           = 1e-25*0.2*np.ones(300)#self.S.getUnitCellPropertyVector('mass')
+        E0               = fluence*1*u.angstrom**2  
+        
+        #initTemp = self.checkInitialTemperature(initTemp) #check temperature and give back a NxK Matrix
+        finalTemp = np.zeros(np.shape(initTemp)) #finalTemp is now a NxK Matrix
+        #traverse unitCells
+        for i in range(0,N):
+            if dAlphadz[i] > 0:                           #if there is absorption in the current unit cell
+                delE = dAlphadz[i]*E0*cAxises[i]
+                fun = lambda finalTemp: (np.abs(masses[i]*(1+intHeatCapacity[i]-intHeatCapacity[i])) - delE)
+                #fun = lambda finalTemp: (np.abs(masses[i]*(intHeatCapacity{i,1}(finalTemp)-intHeatCapacity{i,1}(initTemp[i]))) - delE)
+                finalTemp[i] = spo.minimize(fun,initTemp)['x'][0]
+                
+        deltaT = finalTemp - initTemp  
+        endTime = time.time()
+        toc = np.abs(endTime-startTime)
+       # self.dispMessage('Elapsed time for _temperatureAfterDeltaExcitation_:',toc)
+        
+        return(finalTemp, deltaT)
+#============================================================================================================    
+    def mgauss(x,s,x0,A,*kwargs): 
+
+        if 'FWHM' in kwargs: 
+            s = s/(2*np.sqrt(2*np.log(2)))
+        if 'var' in kwargs: 
+            s = np.sqrt(s)
+        if 'HWHM' in kwargs:
+            s = s/(np.sqrt(2*np.log(2)))
+        #else:
+        #    s = 1 case of std
+                
+        if 'normalize' in kwargs: 
+            a = A/(np.sqrt(2*np.pi*s**2)) # normalize area to 1
+        else: 
+            a = A*np.ones(np.size(s))     # normalize amplitude to 1
+            
+        if np.size(s) > 1:                # if there are more Gaussian pulses the get add up in a for loop
+            x0 = x0*np.ones(np.size(s))
+            y  = np.zeros((np.size(x)))
+        
+            for i in range(0,np.size(s)): 
+                y += a[i] * np.exp(-((x-x0[i])**2)/(2*s[i]**2))
+                
+        else: 
+            y = a * np.exp(-((x-x0)**2)/(2*s**2)) #case of a normal Gaussfunction
+            
+        return(y)
+#============================================================================================================    
+    def generateSource(self,fluence,timePump,pulseWidth,dists): 
+ 
+        dAlphadz = self.getAbsorptionProfile(dists) #returns a Nx1 vectore, N = len(dists)
+        source   = lambda t,z: (dAlphadz[np.where(z >= dists)[0][0]] * mgauss(t,pulseWidth,timePump,fluence,'FWHM','normalize'))
+        return(source)
+#============================================================================================================    
+    
+    def checkInitialTemperature(self,initTemp): 
+        N = self.S.getNumberOfUnitCells()
+        K = self.S.numSubSystems
+        if K == 1: #and np.size(initTemp,0)!= N:
+            initTemp = np.transpose(initTemp)
+        if np.size(initTemp) == 1: 
+            initTemp = initTemp * np.ones((N,K))
+        if np.shape(initTemp) != (N,K): 
+            print('The initial temperature vector must have 1 or NxK elements, where N is the number of unitCells in the sample and K the number of subsystems!')
+        return(initTemp)
+    
+    
+#============================================================================================================
+""" What is the sense if we do it in this Python way? Input = 3xN matrix with fluence,pulseStep,pulseWidth
+    Output are three arrays with the same content. The only things that are useful are the error messages.
+    Do the error message for heatDiffusion
+    See Test checkExcitation to get an idea how to inizialize the function
+"""
+#============================================================================================================
+    def checkExcitation(self,excitation,time):
+        #check if we have a multipuls excitation
+        if np.sum(excitation[1]) + np.sum(excitation[2]) == 0: 
+            #only a fluence, no timePump, no pulseWidth
+            fluence    = excitation
+            timePump   = 0 #the excitation happens at t = 0
+            pulseWidth = 0 #pulse width is 0 by default
+        if np.sum(excitation[2]) == 0: 
+            fluence    = excitation[0,:]
+            timePump   = excitation[1,:]
+            pulseWidth = np.zeros((1,np.size(excitation,1))) #again pulse width is 0 by default, but now its a vector
+        else: 
+            fluence    = excitation[0,:] #set fluence
+            timePump   = excitation[1,:] #set the times
+            pulseWidth = excitation[2,:] #set the pulse width
+        #check the elements of the timePump vector
+        if len(timePump) < len(np.sort(np.unique(timePump))): 
+            print('Error: The excitations have to be unique in time!')
+        else: 
+            timePump = np.sort(np.unique(timePump))
+     #================= Right now there is no heat diffusion================================================       
+     #   throw warnings if heat diffusion should be enabled
+     #   if self.S.numSubSystems > 1 and not self.heatDiffusion: 
+     #       print('Warning:If you are introducing more than 1 subsystem you should enable heat diffusion!')
+     #   if sum(pulseWidth) > 0 and not self.heatDiffusion: 
+     #       pulseWidth[:] = 0
+     #       print('Warning: The effect of finite pulse duration of the excitation is only considered if heat diffusion is enabled! All pulse durations set to 0!')
+     #======================================================================================================       
+        return(fluence,timePump,pulseWidth)
+    
+    
+    
+     #======================================================================================================
+    def calcHeatDiffusion(self,initTemp,time,timePump,pulseWidth,fluence): 
+        start = time.time()
+        
+        K        = self.S.numSubSystems
+        initTemp = self.checkInitialTemperature(initTemp)
+        dStart   = self.getDistancesOfUnitCells()[0]
+        dMid     = self.getDistancesOfUnitCells()[2]
+        handles  = self.S.getUnitCellVectors()[2]
+        
+        if self.distances == False: 
+            #no user defined distances are given
+            #calculate diffusion by unit cell and
+            #interpolate at interfaces
+            #self.distances must exist however! Juts its empty
+            dists = self.S.interpDistancesAtInterfaces(self.intpAtInterfaces)
+        else: 
+            #a user-defined distances vector is given, so determine
+            #the indices for final assignment per unitcell
+            dists = self.distances
+
+        
+        
+        return(tempMap)   
+            
+
+      #======================================================================================================    
+      
+      
+    
+""" The heat class gets initialized with three input arguments:
+S, being the structure from the structure class,
+B, being the boundary conditions needed later to solve the Partial Differential Equation (in heat diffusion)
+forceRecalc
+"""
+
+#forceRecalc = False
+#B = boundaryConditions(1,[],1,[]) to initialize boundry conditions from the boundaryConditions class  
+#h = heat(S,B,forceRecalc) to inizialize the class with the two input arguments: S=Structure (from structure class) B = boundary conditions
+
+
+ #======================================================================================================
+ #============================Testing the Output for inividual functions================================
+ #======================================================================================================
+ 
+ #============================Testing checkExcitation===================================================
+ """
+ In MATLAB  the concatenation happens automatically... 
+In Python we create first an empty 3xN Matrix, where N is the number of pulses and fill it up step for step. 
+This makes the if statements in `checkExcitation(self,excitation,time)` different!
+I do not checke for the form of the excitation matrix, but which rows are 0. 
+However, this makes the entire thing, except for the error messages redundant,
+since what we put in is a matrix 3xN matrix, where each line represents fluence, pulseStep, pulseWidth respectively
+and what we get our are 'just' 3 seperate arrays with the same content. 
+ """
+N = 5; # number of pulses
+pulseWidth = 5*u.ps;
+pulseSep = 20*u.ps;
+fluence     = 5*u.mJ/u.cm**2;
+time        = np.arange(-20,200,0.1)*u.ps
+
+#concatenation happens automatically in MATLAB
+excitation = np.zeros((3,N))
+excitation[0,:] = fluence*np.ones(N);         # fluence
+excitation[1,:] = pulseSep*np.arange(0,N);  # time when the excitation happens
+excitation[2,:] = pulseWidth*np.ones(N);     # pulse width of the excitation
+
+h.checkExcitation(excitation,time)
+
+ #============================Testing checkInitTemp===================================================
+ # Gives back an array (NxK) with the initial temperature
+initTemp = 300*u.K
+h.checkInitialTemperature(initTemp)
+
+#============================Testing generateSource===================================================
+"""
+First the helper funciton `mgauss` from the MATLAB code has been cloned in a way that allows the `source` to work
+generateSource gives back a function handel source(t,z) which creates a gaussian shaped source.
+Note: However now the testing for specivic values, e.g. h.generateSource(fluence,timePump,pulseWidth,dists),
+gives back a devided by 0 Error. This might be because of the way of initialization
+"""
+
+time        = np.arange(-20,200,0.1)*u.ps
+fluence     = 5*u.mJ/u.cm**2;
+initTemp    = 300*u.K;
+pulseWidth  = 0*u.ps
+timePump    = 0
+dists    = np.arange(0,50)
+
+   
+def mgauss(x,s,x0,A,*kwargs):                                
+    if 'FWHM' in kwargs: 
+        s = s/(2*np.sqrt(2*np.log(2)))
+    if 'var' in kwargs: 
+        s = np.sqrt(s)
+    if 'HWHM' in kwargs:
+        s = s/(np.sqrt(2*np.log(2)))
+    #else:
+    #    s = 1 case of std
+    
+    if 'normalize' in kwargs: 
+        a = A/(np.sqrt(2*np.pi*s**2)) # normalize area to 1
+    else: 
+        a = A*np.ones(np.size(s))     # normalize amplitude to 1
+        
+    if np.size(s) > 1:                # if there are more Gaussian pulses the get add up in a for loop
+        x0 = x0*np.ones(np.size(s))
+        y  = np.zeros((np.size(x)))
+        for i in range(0,np.size(s)): 
+            y += a[i] * np.exp(-((x-x0[i])**2)/(2*s[i]**2))        
+    else: 
+        y = a * np.exp(-((x-x0)**2)/(2*s**2)) #case of a normal Gaussfunction
+        
+    return(y)
+    
+h.generateSource(fluence,timePump,pulseWidth,dists) #generates a function
+
+#=======================================Test of boundary conditions ============================================================  
+zl = 3; zr = 5#Those are randomly chosen
+Tl = 4; Tr = 6#
+t = 100*u.ps  # 
+B = boundaryConditions(1,[],1,[]) #setting some default baundary conditions 
+forceRecalc = False
+
+fluence = 5*u.mJ/u.cm**2
+initTemp= 300*u.K
+
+
+print([h.S.numSubSystems,1])
+h.setBoundaryCondition(5e11*u.W/u.m**2,'side', 'left', 'type', 'flux', 'value')
+h.pdeBoundaryConditions(zl,Tl,zr,Tr,t)
+
+#=======================================Test of getAbsorptionProfile ===================================================
+#=================================Test of getTemperatureAfterDeltaExcitation ===========================================
+
+
+#=====================================================================
+#This represents what happens in the checkInitialTemperature function
+#To test getTemperatureAfterDeltaExcitation(fluence,initTemp)
+N        = h.S.getNumberOfUnitCells()
+K        = h.S.numSubSystems
+initTemp = 300*u.K*np.ones((N,K)) 
+#=====================================================================
+dists    = np.arange(0,50)
+fluence  = 5*u.mJ/u.cm**2
+
+
+h.getAbsorptionProfile(dists)
+
+h.getTemperatureAfterDeltaExcitation(fluence,initTemp,dists)
+#Now the output for finalTemp is an array and the output for deltaT is a number...
+
+
+
+#=======================================END OF TESTS ===============================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
